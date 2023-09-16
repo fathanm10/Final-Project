@@ -134,13 +134,14 @@ class Resnet34(nn.Module):
         init.constant_(self.model.embedding.bias, 0)
 
 class Resnet50(nn.Module):
-    def __init__(self,embedding_size, pretrained=True, is_norm=True, bn_freeze = True):
+    def __init__(self,embedding_size, pretrained=True, is_norm=True, bn_freeze = True, freeze_all = False, conv_final=False):
         super(Resnet50, self).__init__()
 
         self.model = resnet50(pretrained)
         self.is_norm = is_norm
         self.embedding_size = embedding_size
         self.num_ftrs = self.model.fc.in_features
+        self.conv_final = conv_final
         self.model.gap = nn.AdaptiveAvgPool2d(1)
         self.model.gmp = nn.AdaptiveMaxPool2d(1)
 
@@ -153,7 +154,10 @@ class Resnet50(nn.Module):
                     m.eval()
                     m.weight.requires_grad_(False)
                     m.bias.requires_grad_(False)
-
+        
+        if freeze_all:
+            for param in self.model.parameters():
+                param.requires_grad = False
     def l2_norm(self,input):
         input_size = input.size()
         buffer = torch.pow(input, 2)
@@ -181,12 +185,15 @@ class Resnet50(nn.Module):
         max_x = self.model.gmp(x)
 
         x = max_x + avg_x
-        x = x.view(x.size(0), -1)
+        x = x.view(x.size(0), -1)  # flatten
+        if self.conv_final:
+            conv_final = x.clone()
         x = self.model.embedding(x)
         
         if self.is_norm:
             x = self.l2_norm(x)
-        
+        if self.conv_final:
+            return x, conv_final
         return x
 
     def _initialize_weights(self):

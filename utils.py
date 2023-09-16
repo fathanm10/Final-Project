@@ -9,6 +9,7 @@ import math
 import umap.umap_
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, classification_report
+from dataset.utils import get_num_classes
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -53,6 +54,8 @@ def predict_batchwise(model, dataloader):
                 if i == 0:
                     # move images to device of model (approximate device)
                     J = model(J.cuda())
+                    if len(J) > 1:
+                        J = J[0]
 
                 for j in J:
                     A[i].append(j)
@@ -70,11 +73,8 @@ def proxy_init_calc(model, dataloader):
     return proxy_mean
 
 def evaluate_cos(model, dataloader):
-    try:
-        nb_classes = dataloader.dataset.nb_classes()
-    except:
-        nb_classes = len(dataloader.dataset.class_to_idx)
-
+    nb_classes = get_num_classes(dataloader.dataset)
+    
     # calculate embeddings with model and get targets
     X, T = predict_batchwise(model, dataloader)
     X = l2_norm(X)
@@ -186,6 +186,8 @@ def evaluate_accuracy(model, dataloader):
             images = images.to(device)
             labels = labels.to(device)
             outputs = model(images)
+            if len(outputs) > 1:
+                outputs=outputs[0]
             _, predicted = torch.max(outputs, 1)
             true_labels.extend(labels.cpu().numpy())
             predicted_labels.extend(predicted.cpu().numpy())
@@ -199,6 +201,8 @@ def evaluate_accuracy(model, dataloader):
 def visualize_umap(model, dataloader, single=True):
     def scatter(model, images, labels):
         logits = model(images)
+        if len(logits) > 1:
+            logits = logits[0]
         reduced_embeddings = reducer.fit_transform(logits.cpu())
         plt.scatter(reduced_embeddings[:, 0], reduced_embeddings[:, 1], c=labels, cmap='Spectral')
     
