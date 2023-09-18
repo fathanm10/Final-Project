@@ -43,6 +43,8 @@ def get_loss_func(loss_func_name,
         return losses.Proxy_Anchor(nb_classes=num_classes, sz_embed=embedding_size, mrg=margin, alpha=alpha)
     if loss_func_name == 'proxy_anchor_lib':
         return pml.losses.ProxyAnchorLoss(num_classes, embedding_size, margin=margin, alpha=alpha).to(device)
+    if loss_func_name == 'proxy_nca':
+        return pml.losses.ProxyNCALoss(num_classes, embedding_size, softmax_scale=1)
     if loss_func_name == 'mutual_likelihood_score':
         return losses.MutualLikelihoodScoreLoss()
 
@@ -88,7 +90,10 @@ def train_model(model_name,
             images = images.to(device)
             labels = labels.to(device)
             outputs = model(images)
-            loss = loss_func(*outputs, labels)
+            if type(outputs) is tuple:
+                loss = loss_func(outputs[0], outputs[1], labels)
+            else:
+                loss = loss_func(outputs, labels)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

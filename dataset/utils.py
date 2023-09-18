@@ -33,7 +33,7 @@ def compose(size):
     return compose
 
 
-def make_dataset(name, split, max_classes=None, min_samples=None, image_size=224):
+def make_dataset(name, split, max_classes=None, min_samples=None, image_size=100):
     if name == 'LFW':
         dataset = torchvision.datasets.LFWPeople(
             root=root,

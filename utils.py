@@ -54,14 +54,13 @@ def predict_batchwise(model, dataloader):
                 if i == 0:
                     # move images to device of model (approximate device)
                     J = model(J.cuda())
-                    if len(J) > 1:
+                    if type(J) is tuple:
                         J = J[0]
 
                 for j in J:
                     A[i].append(j)
     model.train()
     model.train(model_is_training) # revert to previous training state
-    
     return [torch.stack(A[i]) for i in range(len(A))]
 
 def proxy_init_calc(model, dataloader):
@@ -186,9 +185,8 @@ def evaluate_accuracy(model, dataloader):
             images = images.to(device)
             labels = labels.to(device)
             outputs = model(images)
-            if len(outputs) > 1:
-                outputs=outputs[0]
             _, predicted = torch.max(outputs, 1)
+            
             true_labels.extend(labels.cpu().numpy())
             predicted_labels.extend(predicted.cpu().numpy())
 
@@ -198,28 +196,44 @@ def evaluate_accuracy(model, dataloader):
     print(report)
 
 
-def visualize_umap(model, dataloader, single=True):
+def pair_MLS_score(x1, x2, sigma_sq1=None, sigma_sq2=None):
+    mu1, mu2 = np.array(x1), np.array(x2)
+    sigma_sq1, sigma_sq2 = np.array(sigma_sq1), np.array(sigma_sq2)
+    sigma_sq_mutual = sigma_sq1 + sigma_sq2
+    dist = np.sum(np.square(mu1 - mu2) / sigma_sq_mutual + np.log(sigma_sq_mutual), axis=1)
+    return -dist
+
+
+def visualize_umap(model, dataloader, mode=0):
     def scatter(model, images, labels):
         logits = model(images)
-        if len(logits) > 1:
+        if type(logits) is tuple:
             logits = logits[0]
         reduced_embeddings = reducer.fit_transform(logits.cpu())
         plt.scatter(reduced_embeddings[:, 0], reduced_embeddings[:, 1], c=labels, cmap='Spectral')
     
     model.to(device)
+    all_images = []
+    all_labels = []
     reducer = umap.umap_.UMAP()
     with torch.no_grad():
         model.eval()
-        if single:
+        if mode==0:
             images, labels = next(iter(dataloader))
             images = images.to(device)
             scatter(model, images, labels)
-        else:
+        elif mode==1:
             for i, (images, labels) in enumerate(dataloader):
                 print(f'Progress: {i+1}/{len(dataloader)} batch')
                 images = images.to(device)
                 scatter(model, images, labels)
-    
+        elif mode==2:
+            for i, (images, labels) in enumerate(dataloader.dataset):
+                images = images.to(device).unsqueeze(dim=0)
+                all_images.append(images)
+                all_labels.append(labels)
+            all_images = torch.cat(all_images, dim=0)
+            scatter(model, all_images, all_labels)
     plt.title("UMAP Visualization of Predicted Classes and Labels")
     plt.xlabel("umap1")
     plt.ylabel("umap2")
