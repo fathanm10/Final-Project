@@ -196,14 +196,6 @@ def evaluate_accuracy(model, dataloader):
     print(report)
 
 
-def pair_MLS_score(x1, x2, sigma_sq1=None, sigma_sq2=None):
-    mu1, mu2 = np.array(x1), np.array(x2)
-    sigma_sq1, sigma_sq2 = np.array(sigma_sq1), np.array(sigma_sq2)
-    sigma_sq_mutual = sigma_sq1 + sigma_sq2
-    dist = np.sum(np.square(mu1 - mu2) / sigma_sq_mutual + np.log(sigma_sq_mutual), axis=1)
-    return -dist
-
-
 def visualize_umap(model, dataloader, mode=0):
     def scatter(model, images, labels):
         logits = model(images)
@@ -254,3 +246,38 @@ def display_images(dataloader, h, w):
             plt.subplot(h,w,i+1)
             plt.imshow(images[j][0])
             i += 1
+
+
+def estimate_size(model):
+    param_size = 0
+    for param in model.parameters():
+        param_size += param.nelement() * param.element_size()
+    buffer_size = 0
+    for buffer in model.buffers():
+        buffer_size += buffer.nelement() * buffer.element_size()
+
+    size_all_mb = (param_size + buffer_size) / 1024**2
+    print('Estimated model size: {:.3f}MB'.format(size_all_mb))
+
+
+def mls_distance(x1, x2):
+    mu1, sigma_sq1 = [np.array(i.cpu()) for i in x1]
+    mu2, sigma_sq2 = [np.array(i.cpu()) for i in x2]
+    sigma_sq_mutual = sigma_sq1 + sigma_sq2   # must be positive for np.log to work
+    dist = np.sum(np.square(mu1 - mu2) / sigma_sq_mutual + np.log(sigma_sq_mutual), axis=1)
+    return -dist
+
+
+def similarity_score(x1, x2, metric):
+    func = {
+        'cosine' : cosine_similarity,   # embedding
+        'euclidean' : euclidean_distances, # mu
+        'mls' : mls_distance   # mu, log_sigma
+    }
+    
+    if metric!='mls':
+        if type(x1) is tuple:
+            x1 = x1[0].cpu()
+        if type(x2) is tuple:
+            x2 = x2[0].cpu()
+    return func[metric](x1, x2)

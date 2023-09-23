@@ -16,6 +16,7 @@ import torch.optim as optim
 from torch.optim import lr_scheduler
 import losses
 from net.resnet import *
+from net.spherenet import SphereNet
 from net.pfe import PFE
 import time
 import pytorch_metric_learning as pml
@@ -25,11 +26,17 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def get_model(model_name,
              embedding_size=512,
-             pretrained=True):
+             pretrained=True,
+             backbone='resnet50'):
     if model_name == 'resnet50':
         return Resnet50(embedding_size=embedding_size, pretrained=pretrained)
+    elif model_name == 'spherenet':
+        return SphereNet(embedding_size=embedding_size)
     elif model_name == 'pfe':
-        backbone = Resnet50(embedding_size=embedding_size, pretrained=pretrained, freeze_all=True, conv_final=True)
+        if backbone == 'resnet50':
+            backbone = Resnet50(embedding_size=embedding_size, pretrained=pretrained, freeze_all=True, conv_final=True)
+        elif backbone == 'spherenet':
+            backbone = SphereNet(embedding_size=64, model_version='10')
         return PFE(embedding_size, backbone)
 
 
@@ -47,6 +54,8 @@ def get_loss_func(loss_func_name,
         return pml.losses.ProxyNCALoss(num_classes, embedding_size, softmax_scale=1)
     if loss_func_name == 'mutual_likelihood_score':
         return losses.MutualLikelihoodScoreLoss()
+    if loss_func_name == 'cross_entropy':
+        return nn.CrossEntropyLoss()
 
 
 def get_optimizer(optimizer, param, learning_rate, momentum, weight_decay):
@@ -54,6 +63,8 @@ def get_optimizer(optimizer, param, learning_rate, momentum, weight_decay):
         return optim.Adam(param, lr=learning_rate)
     elif optimizer=='sgd':
         return optim.SGD(param, lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
+    elif optimizer=='rmsprop':
+        return optim.RMSprop(param, lr=learning_rate)
 
 
 def train_model(model_name,

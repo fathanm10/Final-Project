@@ -77,6 +77,7 @@ class LFWCustom(Dataset):
             if len(self.classes) >= self.num_classes:
                 break
             class_dir = os.path.join(self.data_dir, class_name)
+            
             if os.path.isdir(class_dir):
                 image_files = os.listdir(class_dir)
                 samples = len(image_files)
@@ -90,7 +91,7 @@ class LFWCustom(Dataset):
                     image_files = image_files[slice_index:]
                 num_samples.append(len(image_files))
                 file_paths.extend([os.path.join(class_dir, fname) for fname in image_files])
-                labels.extend([i] * len(image_files))
+                labels.extend([i] * len(image_files))  # same class, labels is the same
                 i+=1
                 self.classes.add(class_name)
             

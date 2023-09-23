@@ -186,13 +186,13 @@ class Resnet50(nn.Module):
 
         x = max_x + avg_x
         x = x.view(x.size(0), -1)  # flatten
-        if self.conv_final:
-            conv_final = x.clone()
+        if hasattr(self, 'conv_final') and self.conv_final:
+            conv_final = x
         x = self.model.embedding(x)
         
         if self.is_norm:
             x = self.l2_norm(x)
-        if self.conv_final:
+        if hasattr(self, 'conv_final') and self.conv_final:
             return x, conv_final
         return x
 
