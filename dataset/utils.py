@@ -19,26 +19,36 @@ from torch.utils.data import DataLoader
 from collections import Counter
 import numpy as np
 from .dataset import LFWCustom
+from .transform import *
 import time
 
 root='./data'
 
 
-def compose(size):
-    compose = transforms.Compose([
-        transforms.Resize((size,size)),
-        transforms.Grayscale(num_output_channels=3),  # Convert to Grayscale RGB
-        transforms.ToTensor(),
-    ])
+def compose(size, lbp, gabor):
+    transforms_list = [
+        transforms.Resize((size, size)),
+        transforms.Grayscale(num_output_channels=1 if lbp else 1)  # Convert to Grayscale RGB
+    ]
+
+    if gabor:
+        transforms_list += [GaborFilterTransform(frequency=gabor['frequency'], theta=gabor['theta'])]
+
+    if lbp:
+        transforms_list += [LocalBinaryPatternTransform(method=lbp)]
+
+    transforms_list += [transforms.ToTensor()]
+
+    compose = transforms.Compose(transforms_list)
     return compose
 
 
-def make_dataset(name, split, max_classes=None, min_samples=None, image_size=100):
+def make_dataset(name, split, max_classes=None, min_samples=None, image_size=100, lbp=False, gabor=False):
     if name == 'LFW':
         dataset = torchvision.datasets.LFWPeople(
             root=root,
             split=split,
-            transform=compose(image_size),
+            transform=compose(image_size, lbp, gabor),
             download=True
         )
     if name == 'LFWCustom':
@@ -47,13 +57,13 @@ def make_dataset(name, split, max_classes=None, min_samples=None, image_size=100
             split=split,
             max_classes=max_classes,
             min_samples=min_samples,
-            transform=compose(image_size)
+            transform=compose(image_size, lbp, gabor)
         )
     if name == 'CIFAR10':
         dataset = torchvision.datasets.CIFAR10(
             root=root,
             train=True if split=='train' else False,
-            transform=compose(image_size),
+            transform=compose(image_size, lbp, gabor),
             download=True
         )
     return dataset

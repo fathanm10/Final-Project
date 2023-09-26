@@ -87,11 +87,20 @@ def train_model(model_name,
                 save_path=None,
                 verbose=2):
     model = get_model(model_name, embedding_size, pretrained).to(device)
+    layer = model.model.conv1
+    model.model.conv1 = nn.Conv2d(
+        1,
+        layer.out_channels,
+        kernel_size=layer.kernel_size,
+        stride=layer.stride,
+        padding=layer.padding)
+    model.to(device)
     loss_func = get_loss_func(loss_func_name, num_classes, embedding_size=embedding_size, margin=margin, alpha=alpha)
     optimizer = get_optimizer(optimizer, model.parameters(), learning_rate, momentum, weight_decay)
     if use_loss_optimizer:
         loss_optimizer = optim.SGD(loss_func.parameters(), lr=loss_learning_rate)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
+#     scheduler = lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, cooldown=2)
 
     then=time.time()
     for epoch in range(epochs):
@@ -115,8 +124,9 @@ def train_model(model_name,
             if verbose > 1 and (i+1==len(dataloader) or (i+1)%10==0):
                 print(f'Step: [{i+1}/{len(dataloader)}] Epoch [{epoch+1}/{epochs}] Loss: {running_loss / len(dataloader):.4f} Time: {time.time() - then:.4f}')
         if verbose > 0:
-            print(f'Epoch [{epoch+1}/{epochs}] Loss: {running_loss / len(dataloader):.4f} Time: {time.time() - then:.4f}')
-        scheduler.step()
+            print(f'Epoch [{epoch+1}/{epochs}] Loss: {running_loss / len(dataloader):.4f} Time: {time.time() - then:.4f} Learning rate: {optimizer.param_groups[0]["lr"]}')
+#         scheduler.step()
+        scheduler.step(running_loss / len(dataloader))
 
     print(f'Finished Training, Time: {time.time()-then:.4f}')
     if save_path != None:

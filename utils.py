@@ -244,7 +244,7 @@ def display_images(dataloader, h, w):
                 stop = True
                 break
             plt.subplot(h,w,i+1)
-            plt.imshow(images[j][0])
+            plt.imshow(np.transpose(images[j], axes=[1,2,0]))
             i += 1
 
 
