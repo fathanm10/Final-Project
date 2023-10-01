@@ -53,7 +53,7 @@ def predict_batchwise(model, dataloader):
                 # i = 2: sz_batch * indices
                 if i == 0:
                     # move images to device of model (approximate device)
-                    J = model(J.cuda())
+                    J = model(J.cuda().float())
                     if type(J) is tuple:
                         J = J[0]
 
@@ -182,7 +182,7 @@ def evaluate_accuracy(model, dataloader):
 
     with torch.no_grad():
         for images, labels in dataloader:
-            images = images.to(device)
+            images = images.to(device).float()
             labels = labels.to(device)
             outputs = model(images)
             _, predicted = torch.max(outputs, 1)
@@ -212,16 +212,16 @@ def visualize_umap(model, dataloader, mode=0):
         model.eval()
         if mode==0:
             images, labels = next(iter(dataloader))
-            images = images.to(device)
+            images = images.to(device).float()
             scatter(model, images, labels)
         elif mode==1:
             for i, (images, labels) in enumerate(dataloader):
                 print(f'Progress: {i+1}/{len(dataloader)} batch')
-                images = images.to(device)
+                images = images.to(device).float()
                 scatter(model, images, labels)
         elif mode==2:
             for i, (images, labels) in enumerate(dataloader.dataset):
-                images = images.to(device).unsqueeze(dim=0)
+                images = images.to(device).float().unsqueeze(dim=0)
                 all_images.append(images)
                 all_labels.append(labels)
             all_images = torch.cat(all_images, dim=0)

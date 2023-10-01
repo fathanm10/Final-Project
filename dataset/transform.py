@@ -15,7 +15,9 @@
 import torch
 import numpy as np
 from skimage.feature import local_binary_pattern
-from skimage.filters import gabor
+from skimage.filters import gabor, rank
+from skimage.exposure import equalize_hist, equalize_adapthist
+from skimage.morphology import disk
 
 
 class CompoundLocalBinaryPatternTransform(object):
@@ -101,8 +103,37 @@ class GaborFilterTransform(object):
     def __call__(self, img):
         if not isinstance(img, np.ndarray):
             img = np.array(img)
+        # overlay outputs of multiple thetas
         out = np.zeros(img.shape, dtype=np.uint8)
         for theta in self.thetas:
             out = np.maximum(out, gabor(img, frequency=self.frequency, theta=theta)[1])
         return out
+        
+        # return single theta output
 #         return np.array(gabor(img, frequency=self.frequency, theta=self.theta)[0], dtype=np.uint8)
+
+
+class HistogramEqualizationTransform(object):
+    def __init__(self, method='default', clip_limit=.01, disk_size=30):
+        self.method = method
+        self.clip_limit = clip_limit
+        self.disk_size = disk_size
+    
+    def __call__(self, img):
+        img = np.array(img)
+        if self.method == 'default':
+            out = equalize_hist(img)  # normalized
+        elif self.method == 'adaptive':
+            out = equalize_adapthist(img, clip_limit=self.clip_limit)  # normalized
+        elif self.method == 'local':
+            out = rank.equalize(img, footprint=disk(self.disk_size))
+        return out
+
+
+from skimage.filters import threshold_otsu, threshold_local
+class CustomTransform(object):
+    def __init__(self, size=15):
+        self.block_size = size
+    def __call__(self, img):
+        img = np.array(img)
+        return img > threshold_local(img, self.block_size)

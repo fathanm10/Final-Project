@@ -107,7 +107,7 @@ def train_model(model_name,
         model.train()
         running_loss = 0.0
         for i, (images, labels) in enumerate(dataloader):
-            images = images.to(device)
+            images = images.to(device).float()
             labels = labels.to(device)
             outputs = model(images)
             if type(outputs) is tuple:

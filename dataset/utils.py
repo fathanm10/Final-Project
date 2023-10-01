@@ -25,30 +25,41 @@ import time
 root='./data'
 
 
-def compose(size, lbp, gabor):
-    transforms_list = [
+def compose(size, lbp, gabor, hist, crop, custom):
+    transforms_list = []
+    if crop:
+        transforms_list += [transforms.CenterCrop(crop)]
+    
+    transforms_list += [
         transforms.Resize((size, size)),
         transforms.Grayscale(num_output_channels=1 if lbp else 1)  # Convert to Grayscale RGB
     ]
-
+        
+    if hist:
+        transforms_list += [HistogramEqualizationTransform(method=hist)]
+        
     if gabor:
         transforms_list += [GaborFilterTransform(frequency=gabor['frequency'], theta=gabor['theta'])]
 
     if lbp:
         transforms_list += [LocalBinaryPatternTransform(method=lbp)]
-
+    
+    if custom:
+        transforms_list += [CustomTransform(custom)]
+        
     transforms_list += [transforms.ToTensor()]
 
     compose = transforms.Compose(transforms_list)
     return compose
 
 
-def make_dataset(name, split, max_classes=None, min_samples=None, image_size=100, lbp=False, gabor=False):
+def make_dataset(name, split, max_classes=None, min_samples=None, image_size=100, lbp=False, gabor=False, hist=False, crop=False, custom=False):
+    comp = compose(image_size, lbp, gabor, hist, crop, custom)
     if name == 'LFW':
         dataset = torchvision.datasets.LFWPeople(
             root=root,
             split=split,
-            transform=compose(image_size, lbp, gabor),
+            transform=comp,
             download=True
         )
     if name == 'LFWCustom':
@@ -57,13 +68,13 @@ def make_dataset(name, split, max_classes=None, min_samples=None, image_size=100
             split=split,
             max_classes=max_classes,
             min_samples=min_samples,
-            transform=compose(image_size, lbp, gabor)
+            transform=comp
         )
     if name == 'CIFAR10':
         dataset = torchvision.datasets.CIFAR10(
             root=root,
             train=True if split=='train' else False,
-            transform=compose(image_size, lbp, gabor),
+            transform=comp,
             download=True
         )
     return dataset
