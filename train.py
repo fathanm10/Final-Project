@@ -20,6 +20,7 @@ from net.spherenet import SphereNet
 from net.pfe import PFE
 import time
 import pytorch_metric_learning as pml
+import sys
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -44,14 +45,11 @@ def get_loss_func(loss_func_name,
                   num_classes=None,
                   embedding_size=512,
                   margin=0.1,
-                  alpha=32
-                 ):
+                  alpha=32):
+#     if loss_func_name == 'proxy_anchor_origin':
+#         return losses.Proxy_Anchor(nb_classes=num_classes, sz_embed=embedding_size, mrg=margin, alpha=alpha)
     if loss_func_name == 'proxy_anchor':
-        return losses.Proxy_Anchor(nb_classes=num_classes, sz_embed=embedding_size, mrg=margin, alpha=alpha)
-    if loss_func_name == 'proxy_anchor_lib':
         return pml.losses.ProxyAnchorLoss(num_classes, embedding_size, margin=margin, alpha=alpha).to(device)
-    if loss_func_name == 'proxy_nca':
-        return pml.losses.ProxyNCALoss(num_classes, embedding_size, softmax_scale=1)
     if loss_func_name == 'mutual_likelihood_score':
         return losses.MutualLikelihoodScoreLoss()
     if loss_func_name == 'cross_entropy':
@@ -87,14 +85,6 @@ def train_model(model_name,
                 save_path=None,
                 verbose=2):
     model = get_model(model_name, embedding_size, pretrained).to(device)
-    layer = model.model.conv1
-    model.model.conv1 = nn.Conv2d(
-        1,
-        layer.out_channels,
-        kernel_size=layer.kernel_size,
-        stride=layer.stride,
-        padding=layer.padding)
-    model.to(device)
     loss_func = get_loss_func(loss_func_name, num_classes, embedding_size=embedding_size, margin=margin, alpha=alpha)
     optimizer = get_optimizer(optimizer, model.parameters(), learning_rate, momentum, weight_decay)
     if use_loss_optimizer:
@@ -103,6 +93,10 @@ def train_model(model_name,
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, cooldown=2)
 
     then=time.time()
+    best_loss = sys.maxsize
+    if (loss_func_name == 'mutual_likelihood_score'):
+        best_loss = -best_loss
+        
     for epoch in range(epochs):
         model.train()
         running_loss = 0.0
@@ -121,14 +115,25 @@ def train_model(model_name,
                 loss_optimizer.step()
 
             running_loss += loss.item()
+            current_loss = running_loss / len(dataloader)
             if verbose > 1 and (i+1==len(dataloader) or (i+1)%10==0):
-                print(f'Step: [{i+1}/{len(dataloader)}] Epoch [{epoch+1}/{epochs}] Loss: {running_loss / len(dataloader):.4f} Time: {time.time() - then:.4f}')
+                print(f'Step: [{i+1}/{len(dataloader)}] Epoch [{epoch+1}/{epochs}] Loss: {current_loss:.4f} Time: {time.time() - then:.4f}')
         if verbose > 0:
-            print(f'Epoch [{epoch+1}/{epochs}] Loss: {running_loss / len(dataloader):.4f} Time: {time.time() - then:.4f} Learning rate: {optimizer.param_groups[0]["lr"]}')
+            print(f'Epoch [{epoch+1}/{epochs}] Loss: {current_loss:.4f} Time: {time.time() - then:.4f} Learning rate: {optimizer.param_groups[0]["lr"]}')
 #         scheduler.step()
-        scheduler.step(running_loss / len(dataloader))
+        scheduler.step(current_loss)
+        
+        comparator =  (current_loss < best_loss)
+        if (loss_func_name == 'mutual_likelihood_score'):
+            comparator = not comparator
+            
+        if comparator:
+            best_state = model.state_dict()
+            best_loss = current_loss
+            
 
-    print(f'Finished Training, Time: {time.time()-then:.4f}')
+    print(f'Finished Training, Time: {time.time()-then:.4f} Best loss: {best_loss:.4f}')
+    model.load_state_dict(best_state)
     if save_path != None:
         torch.save(model, save_path)
     return model

@@ -25,27 +25,37 @@ import time
 root='./data'
 
 
-def compose(size, lbp, gabor, hist, crop, custom):
+def compose(size, face_detection, hist, clip_limit, nbins, crop, median, median_before, unsharp, unsharp_radius, unsharp_amount, unsharp_after, denoise_wavelet, median_unsharp, median_unsharp_amount):
     transforms_list = []
     if crop:
         transforms_list += [transforms.CenterCrop(crop)]
     
-    transforms_list += [
-        transforms.Resize((size, size)),
-        transforms.Grayscale(num_output_channels=1 if lbp else 1)  # Convert to Grayscale RGB
-    ]
+    if face_detection:
+        transforms_list += [FaceDetectionCrop()]
+        
+    if size:
+        transforms_list += [transforms.Resize((size, size))]
+    
+    if denoise_wavelet:
+        transforms_list += [DenoiseWavelet()]
+        
+    if median_before:
+        transforms_list += [MedianFilter()]
+    
+    if unsharp:
+        transforms_list += [UnsharpFilter(radius=unsharp_radius, amount=unsharp_amount)]
+        
+    if median_unsharp:
+        transforms_list += [MedianUnsharpFilter(amount=median_unsharp_amount)]
         
     if hist:
-        transforms_list += [HistogramEqualizationTransform(method=hist)]
+        transforms_list += [HistogramEqualization(method=hist, clip_limit=clip_limit,nbins=nbins)]
         
-    if gabor:
-        transforms_list += [GaborFilterTransform(frequency=gabor['frequency'], theta=gabor['theta'])]
-
-    if lbp:
-        transforms_list += [LocalBinaryPatternTransform(method=lbp)]
+    if median:
+        transforms_list += [MedianFilter()]
     
-    if custom:
-        transforms_list += [CustomTransform(custom)]
+    if unsharp_after:
+        transforms_list += [UnsharpFilter(radius=unsharp_radius, amount=unsharp_amount)]
         
     transforms_list += [transforms.ToTensor()]
 
@@ -53,8 +63,8 @@ def compose(size, lbp, gabor, hist, crop, custom):
     return compose
 
 
-def make_dataset(name, split, max_classes=None, min_samples=None, image_size=100, lbp=False, gabor=False, hist=False, crop=False, custom=False):
-    comp = compose(image_size, lbp, gabor, hist, crop, custom)
+def make_dataset(name, split, max_classes=None, min_samples=None, image_size=100, face_detection=True, hist=False, clip_limit=.01, nbins=512, crop=False, median=False, median_before=False, unsharp=False, unsharp_radius=20, unsharp_amount=1, unsharp_after=False, denoise_wavelet=False, median_unsharp=False, median_unsharp_amount=1):
+    comp = compose(image_size, face_detection, hist, clip_limit, nbins, crop, median, median_before, unsharp, unsharp_radius, unsharp_amount, unsharp_after, denoise_wavelet, median_unsharp, median_unsharp_amount)
     if name == 'LFW':
         dataset = torchvision.datasets.LFWPeople(
             root=root,

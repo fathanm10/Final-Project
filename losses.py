@@ -60,20 +60,6 @@ class Proxy_Anchor(torch.nn.Module):
         
         return loss
 
-# We use PyTorch Metric Learning library for the following codes.
-# Please refer to "https://github.com/KevinMusgrave/pytorch-metric-learning" for details.
-class Proxy_NCA(torch.nn.Module):
-    def __init__(self, nb_classes, sz_embed, scale=32):
-        super(Proxy_NCA, self).__init__()
-        self.nb_classes = nb_classes
-        self.sz_embed = sz_embed
-        self.scale = scale
-        self.loss_func = losses.ProxyNCALoss(num_classes = self.nb_classes, embedding_size = self.sz_embed, softmax_scale = self.scale).cuda()
-
-    def forward(self, embeddings, labels):
-        loss = self.loss_func(embeddings, labels)
-        return loss
-
 class MultiSimilarityLoss(torch.nn.Module):
     def __init__(self, ):
         super(MultiSimilarityLoss, self).__init__()
