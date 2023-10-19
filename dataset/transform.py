@@ -15,10 +15,11 @@
 import torch
 import numpy as np
 from skimage.filters import rank, median, unsharp_mask
-from skimage.exposure import equalize_adapthist
+from skimage.exposure import equalize_adapthist, adjust_log
 from skimage.morphology import disk
 from skimage.color import rgb2hsv, hsv2rgb
 from skimage.restoration import denoise_wavelet
+from skimage.metrics import peak_signal_noise_ratio as psnr
 from face_recognition import face_locations
 
 
@@ -31,7 +32,7 @@ class HistogramEqualization(object):
     
     def __call__(self, img):
         img = np.array(img)
-        if self.method == 'v':   # v
+        if self.method == 'v':
             out = equalize_adapthist(img, clip_limit=self.clip_limit, nbins=self.nbins)
         else:
             hsv_img = rgb2hsv(img)
@@ -52,14 +53,25 @@ class FaceDetectionCrop(object):
         return img.crop([L,U,R,D])
 
 
-# +
-# TODO: Median filter, sharpening, denoising
-# -
-
 class MedianFilter(object):
     def __call__(self, img):
         img = np.array(img)
         return median(img)
+
+
+class MedianHSVFilter(object):
+    def __init__(self, method='v'):
+        self.method = method
+    def __call__(self, img):
+        img = np.array(img)
+        hsv_img = rgb2hsv(img)
+        if 'h' in self.method:
+            hsv_img[:,:,0] = median(hsv_img[:,:,0])
+        if 's' in self.method:
+            hsv_img[:,:,1] = median(hsv_img[:,:,1])
+        if 'v' in self.method:
+            hsv_img[:,:,2] = median(hsv_img[:,:,2])
+        return hsv2rgb(hsv_img)
 
 
 class MedianUnsharpFilter(object):
@@ -95,3 +107,9 @@ class DenoiseWavelet(object):
     def __call__(self, img):
         img = np.array(img)
         return denoise_wavelet(img, convert2ycbcr=True, rescale_sigma=True, channel_axis=-1)
+
+
+class AdjustLog(object):
+    def __call__(self, img):
+        img = np.array(img)
+        return adjust_log(img, 1)

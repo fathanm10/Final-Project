@@ -17,6 +17,7 @@ from torch.utils.data import Dataset
 from PIL import Image
 import os
 from torchvision import transforms
+import numpy as np
 
 
 class LFWCustom(Dataset):
@@ -35,12 +36,24 @@ class LFWCustom(Dataset):
         return len(self.file_paths)
     
     def __getitem__(self, idx):
-        img_path = self.file_paths[idx]
-        label = self.labels[idx]
-        image = Image.open(img_path).convert('RGB')
-        if self.transform:
-            image = self.transform(image)
-        return image, label
+        if isinstance(idx, slice):
+            # Handle list slicing
+            pairs = []
+            for i in range(*idx.indices(len(self))):
+                img_path = self.file_paths[i]
+                label = self.labels[i]
+                image = Image.open(img_path).convert('RGB')
+                if self.transform:
+                    image = self.transform(image)
+                pairs.append((image,label))
+            return pairs
+        else:
+            img_path = self.file_paths[idx]
+            label = self.labels[idx]
+            image = Image.open(img_path).convert('RGB')
+            if self.transform:
+                image = self.transform(image)
+            return image, label
     
     def __repr__(self):
         return f"""Dataset LFWCustom

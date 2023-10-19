@@ -25,8 +25,11 @@ import time
 root='./data'
 
 
-def compose(size, face_detection, hist, clip_limit, nbins, crop, median, median_before, unsharp, unsharp_radius, unsharp_amount, unsharp_after, denoise_wavelet, median_unsharp, median_unsharp_amount):
+def compose(size, face_detection, hist, clip_limit, nbins, crop, median, median_before, unsharp, unsharp_radius, unsharp_amount, unsharp_after, denoise_wavelet, median_unsharp, median_unsharp_amount, median_hsv, adjust_log, adjust_log_before, flip, custom, custom2):
     transforms_list = []
+    if flip:
+        transforms_list += [transforms.RandomHorizontalFlip(flip)]
+        
     if crop:
         transforms_list += [transforms.CenterCrop(crop)]
     
@@ -41,6 +44,9 @@ def compose(size, face_detection, hist, clip_limit, nbins, crop, median, median_
         
     if median_before:
         transforms_list += [MedianFilter()]
+        
+    if median_hsv:
+        transforms_list += [MedianHSVFilter(method=median_hsv)]
     
     if unsharp:
         transforms_list += [UnsharpFilter(radius=unsharp_radius, amount=unsharp_amount)]
@@ -51,11 +57,33 @@ def compose(size, face_detection, hist, clip_limit, nbins, crop, median, median_
     if hist:
         transforms_list += [HistogramEqualization(method=hist, clip_limit=clip_limit,nbins=nbins)]
         
+    if adjust_log_before:
+        transforms_list += [AdjustLog()]
+        
     if median:
         transforms_list += [MedianFilter()]
+        
+    if adjust_log:
+        transforms_list += [AdjustLog()]
     
     if unsharp_after:
         transforms_list += [UnsharpFilter(radius=unsharp_radius, amount=unsharp_amount)]
+    
+    if custom:
+        transforms_list += [
+            UnsharpFilter(radius=unsharp_radius, amount=unsharp_amount),
+            AdjustLog(),
+            MedianUnsharpFilter(amount=median_unsharp_amount),
+            MedianFilter(),
+            HistogramEqualization(method='v', clip_limit=clip_limit,nbins=nbins),
+        ]
+        
+    if custom2:
+        transforms_list += [
+            UnsharpFilter(radius=unsharp_radius, amount=unsharp_amount),
+            MedianFilter(),
+            HistogramEqualization(method='v', clip_limit=clip_limit,nbins=nbins),
+        ]
         
     transforms_list += [transforms.ToTensor()]
 
@@ -63,8 +91,8 @@ def compose(size, face_detection, hist, clip_limit, nbins, crop, median, median_
     return compose
 
 
-def make_dataset(name, split, max_classes=None, min_samples=None, image_size=100, face_detection=True, hist=False, clip_limit=.01, nbins=512, crop=False, median=False, median_before=False, unsharp=False, unsharp_radius=20, unsharp_amount=1, unsharp_after=False, denoise_wavelet=False, median_unsharp=False, median_unsharp_amount=1):
-    comp = compose(image_size, face_detection, hist, clip_limit, nbins, crop, median, median_before, unsharp, unsharp_radius, unsharp_amount, unsharp_after, denoise_wavelet, median_unsharp, median_unsharp_amount)
+def make_dataset(name, split, max_classes=None, min_samples=None, image_size=100, face_detection=True, hist=False, clip_limit=.01, nbins=512, crop=False, median=False, median_before=False, unsharp=False, unsharp_radius=20, unsharp_amount=1, unsharp_after=False, denoise_wavelet=False, median_unsharp=False, median_unsharp_amount=1, median_hsv=False, adjust_log=False, adjust_log_before=False, flip=False, custom=False, custom2=False):
+    comp = compose(image_size, face_detection, hist, clip_limit, nbins, crop, median, median_before, unsharp, unsharp_radius, unsharp_amount, unsharp_after, denoise_wavelet, median_unsharp, median_unsharp_amount, median_hsv, adjust_log, adjust_log_before, flip, custom, custom2)
     if name == 'LFW':
         dataset = torchvision.datasets.LFWPeople(
             root=root,
