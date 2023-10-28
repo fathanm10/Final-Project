@@ -123,6 +123,9 @@ def train_model(model_name,
 #         scheduler.step()
         scheduler.step(current_loss)
         
+        if epoch == 0:
+            best_state = model.state_dict()
+            
         comparator =  (current_loss < best_loss)
         if (loss_func_name == 'mutual_likelihood_score'):
             comparator = not comparator
@@ -130,7 +133,6 @@ def train_model(model_name,
         if comparator:
             best_state = model.state_dict()
             best_loss = current_loss
-            
 
     print(f'Finished Training, Time: {time.time()-then:.4f} Best loss: {best_loss:.4f}')
     model.load_state_dict(best_state)

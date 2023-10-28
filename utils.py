@@ -236,16 +236,16 @@ def visualize_umap(model, dataloader, mode=0):
 def display_images(dataloader, h, w):
     i = 0
     stop = False
-    for images, labels in dataloader:
-        if stop:
+    dataset=dataloader
+    if hasattr(dataloader, 'dataset'):
+        dataset = dataloader.dataset
+    plt.figure(figsize=(3*w,3*h))
+    for images, labels in dataset:
+        if i == h*w:
             break
-        for j in range(images.shape[0]):  # elements in batch
-            if i == h*w:
-                stop = True
-                break
-            plt.subplot(h,w,i+1)
-            plt.imshow(np.transpose(images[j], axes=[1,2,0]))
-            i += 1
+        plt.subplot(h,w,i+1)
+        plt.imshow(np.transpose(images, axes=[1,2,0]))
+        i += 1
 
 
 def estimate_size(model):

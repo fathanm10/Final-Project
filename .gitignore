@@ -2,3 +2,5 @@ saved_models/
 __*/
 *checkpoints/
 data/
+*.pkl
+*.csv
