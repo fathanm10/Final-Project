@@ -41,9 +41,6 @@ def compose(size, face_detection, face_detection_crop, pad_ratio, hist, clip_lim
         
     if face_detection:
         transforms_list += [FaceDetectionCrop(pad_ratio=pad_ratio,crop=face_detection_crop)]
-    
-    if flip:
-        transforms_list += []
         
     if size:
         transforms_list += [transforms.Resize((size, size))]

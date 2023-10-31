@@ -21,6 +21,7 @@ from net.pfe import PFE
 import time
 import pytorch_metric_learning as pml
 import sys
+from tqdm import tqdm
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -100,7 +101,7 @@ def train_model(model_name,
     for epoch in range(epochs):
         model.train()
         running_loss = 0.0
-        for i, (images, labels) in enumerate(dataloader):
+        for i, (images, labels) in enumerate(tqdm(dataloader, position=0, leave=True)):
             images = images.to(device).float()
             labels = labels.to(device)
             outputs = model(images)
@@ -136,6 +137,8 @@ def train_model(model_name,
 
     print(f'Finished Training, Time: {time.time()-then:.4f} Best loss: {best_loss:.4f}')
     model.load_state_dict(best_state)
-    if save_path != None:
+    try:
         torch.save(model, save_path)
+    except:
+        pass
     return model
