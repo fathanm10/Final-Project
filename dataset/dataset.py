@@ -30,7 +30,9 @@ class LFWCustom(Dataset):
         self.min_samples = min_samples
         self.classes = set()
         self.file_paths, self.labels = self.load_data(max_classes)
+        self.targets = self.labels
         self.transform = transform
+        
     
     def __len__(self):
         return len(self.file_paths)

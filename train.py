@@ -21,7 +21,7 @@ from net.pfe import PFE
 import time
 import pytorch_metric_learning as pml
 import sys
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -66,6 +66,7 @@ def get_optimizer(optimizer, param, learning_rate, momentum, weight_decay):
         return optim.RMSprop(param, lr=learning_rate)
 
 
+# +
 def train_model(model_name,
                 loss_func_name,
                 num_classes,
@@ -94,14 +95,11 @@ def train_model(model_name,
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, cooldown=2)
 
     then=time.time()
-    best_loss = sys.maxsize
-    if (loss_func_name == 'mutual_likelihood_score'):
-        best_loss = -best_loss
-        
     for epoch in range(epochs):
         model.train()
         running_loss = 0.0
-        for i, (images, labels) in enumerate(tqdm(dataloader, position=0, leave=True)):
+        batch_bar = tqdm(dataloader, desc=f'Epoch [{epoch+1}/{epochs}]')
+        for i, (images, labels) in enumerate(batch_bar):
             images = images.to(device).float()
             labels = labels.to(device)
             outputs = model(images)
@@ -117,15 +115,18 @@ def train_model(model_name,
 
             running_loss += loss.item()
             current_loss = running_loss / len(dataloader)
+            batch_bar.set_postfix({'loss': current_loss, 'lr': optimizer.param_groups[0]["lr"]})
             if verbose > 1 and (i+1==len(dataloader) or (i+1)%10==0):
                 print(f'Step: [{i+1}/{len(dataloader)}] Epoch [{epoch+1}/{epochs}] Loss: {current_loss:.4f} Time: {time.time() - then:.4f}')
         if verbose > 0:
             print(f'Epoch [{epoch+1}/{epochs}] Loss: {current_loss:.4f} Time: {time.time() - then:.4f} Learning rate: {optimizer.param_groups[0]["lr"]}')
+
 #         scheduler.step()
         scheduler.step(current_loss)
         
         if epoch == 0:
             best_state = model.state_dict()
+            best_loss = current_loss
             
         comparator =  (current_loss < best_loss)
         if (loss_func_name == 'mutual_likelihood_score'):

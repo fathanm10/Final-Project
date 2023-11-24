@@ -3,17 +3,28 @@ import torch
 import logging
 import losses
 import json
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 import torch.nn.functional as F
 import math
 import umap.umap_
 import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score, classification_report, pairwise, roc_curve, auc
 from dataset.utils import get_num_classes
+import time
+import pickle
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
+# +
+'''
+@InProceedings{Kim_2020_CVPR,
+    author = {Kim, Sungyeon and Kim, Dongwon and Cho, Minsu and Kwak, Suha},
+    title = {Proxy Anchor Loss for Deep Metric Learning},
+    booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    month = {June},
+    year = {2020}
+}
+'''
 def l2_norm(input):
     input_size = input.size()
     buffer = torch.pow(input, 2)
@@ -35,7 +46,6 @@ def calc_recall_at_k(T, Y, k):
         if t in torch.Tensor(y).long()[:k]:
             s += 1
     return s / (1. * len(T))
-
 
 def predict_batchwise(model, dataloader):
     device = "cuda"
@@ -174,6 +184,8 @@ def evaluate_cos_SOP(model, dataloader):
     return recall
 
 
+# -
+
 def evaluate_accuracy(model, dataloader):
     model.eval() 
 
@@ -260,6 +272,14 @@ def estimate_size(model):
     print('Estimated model size: {:.3f}MB'.format(size_all_mb))
 
 
+'''
+@article{shi2019PFE,
+  title = {Probabilistic Face Embeddings},
+  author = {Shi, Yichun and Jain, Anil K.},
+  booktitle = {arXiv:1904.09658},
+  year = {2019}
+}
+'''
 def mls_distance(x1, x2):
     mu1, sigma_sq1 = [np.array(i.cpu()) for i in x1]
     mu2, sigma_sq2 = [np.array(i.cpu()) for i in x2]
@@ -270,14 +290,226 @@ def mls_distance(x1, x2):
 
 def similarity_score(x1, x2, metric):
     func = {
-        'cosine' : cosine_similarity,   # embedding
-        'euclidean' : euclidean_distances, # mu
+        'cosine' : pairwise.cosine_similarity,   # embedding
+        'euclidean' : pairwise.euclidean_distances, # mu
         'mls' : mls_distance   # mu, log_sigma
     }
     
     if metric!='mls':
         if type(x1) is tuple:
             x1 = x1[0].cpu()
+        else:
+            x1 = x1.cpu()
         if type(x2) is tuple:
             x2 = x2[0].cpu()
+        else:
+            x2 = x2.cpu()
     return func[metric](x1, x2)
+
+
+# +
+def evaluate_pair(model, dataset, metric='cosine', threshold=None):
+    model.to(device)
+    model.eval()
+    with torch.no_grad():
+        sim_scores = []
+        labels = []
+        img1s = []
+        img2s = []
+        for img1, img2, label in dataset:
+            img1s.append(img1.to(device).unsqueeze(dim=0))
+            img2s.append(img2.to(device).unsqueeze(dim=0))
+            labels.append(label)
+        img1s = torch.cat(img1s, dim=0)
+        img2s = torch.cat(img2s, dim=0)
+        x1 = model(img1s.to(device)).cpu()
+        x2 = model(img2s.to(device)).cpu()
+        sim_score = similarity_score(x1,x2,metric)
+        sim_scores.append(sim_score)
+    sim_scores = np.array(sim_scores)
+    labels = np.array(labels)
+    
+    # choose threshold with most accuracies
+    label_vec = (sim_scores>0.5) == labels
+    if threshold != None:
+        label_vec = (sim_scores>threshold) == labels
+        far, tar, thresholds = roc_curve(np.repeat(labels, sim_score.shape[0]), sim_score.reshape(-1))
+        # Calculate AUC using scikit-learn
+        auc_score = auc(far, tar)
+        return far, tar, auc_score
+    
+#     score_pos = sim_scores[label_vec==True]
+#     thresholds = np.sort(score_pos)
+    thresholds = np.array([i/4 for i in range(21)])
+    accuracies = np.zeros(np.size(thresholds))
+    for i, threshold in enumerate(thresholds):
+        pred_vec = sim_scores>=threshold
+        accuracies[i] = np.mean(pred_vec==labels)
+
+    argmax = np.argmax(accuracies)
+    accuracy = accuracies[argmax]
+    threshold = np.mean(thresholds[accuracies==accuracy])
+    return accuracy, threshold
+
+
+# -
+
+def evaluate(model, dataset, metric='cosine'):
+    model.to(device)
+    model.eval()
+
+    sim_scores = []
+    labels = []
+
+    # Move the model to evaluation mode and set the data types once
+    with torch.no_grad():
+        for data in dataset:
+            img = data[0].unsqueeze(0)
+            img2 = data[1].unsqueeze(0)
+            labels.append(data[2])
+
+        # Batch processing: Stack the images for efficient computation
+        img = torch.cat([sample[0].unsqueeze(0) for sample in dataset]).to(device).type(torch.float32)
+        img2 = torch.cat([sample[1].unsqueeze(0) for sample in dataset]).to(device).type(torch.float32)
+
+        # Compute the representations for all samples in the dataset
+        x = model(img)
+        y = model(img2)
+
+        # Calculate similarity scores for all pairs in the dataset
+        sim_scores = similarity_score(x, y, metric)
+        if len(sim_scores.shape)>1:
+            sim_scores = sim_scores.diagonal()
+
+    return labels, sim_scores
+
+
+def plot_roc(far, tar, thresholds):
+    auc_score=auc(far,tar)
+    plt.plot(far, tar, label='ROC curve (area = %0.2f)' % auc_score)
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic')
+    plt.legend(loc="lower right")
+    plt.show()
+
+
+def tar_at_far(tar,far):
+    a=np.interp(.1,far,tar)
+    b=np.interp(.01,far,tar)
+    c=np.interp(.001,far,tar)
+    d=np.interp(.0001,far,tar)
+    print(f'''TAR@FAR:
+    1%: {a:.4f}
+  0.1%: {b:.4f}
+ 0.01%: {c:.4f}
+0.001%: {d:.4f}''')
+    return a,b,c,d
+
+
+def accuracy(labels, sim_scores, thresholds):
+    accuracy_scores = []
+    for thresh in thresholds:
+        accuracy_scores.append(accuracy_score(labels, [m > thresh for m in sim_scores]))
+
+    accuracies = np.array(accuracy_scores)
+    max_accuracy = accuracies.max() 
+    max_accuracy_threshold =  thresholds[accuracies.argmax()]
+    print(f'Accuracy: {max_accuracy}, Threshold: {max_accuracy_threshold}')
+    return max_accuracy, max_accuracy_threshold
+
+
+def visualize(labels, sim_scores):
+    far,tar,thresholds=roc_curve(labels,sim_scores)
+    plot_roc(far,tar,thresholds)
+    tar_at_far(tar,far)
+
+
+# +
+def save_output(output, name):
+    try:
+        data = load_output()
+    except:
+        data = dict()
+    data[name] = output
+    with open('recall.pkl', 'wb') as file:
+        pickle.dump(data, file)
+        
+def load_output():
+    with open('recall.pkl', 'rb') as file:
+        return pickle.load(file)
+
+
+# +
+def compute_map_at_r(labels,label_predictions):
+    """
+    labels : [num_samples] (target labels)
+    label_predictions : [number of samples x k] (k predicted labels/neighbours)
+    """
+    assert label_predictions.dim() == 2
+    assert labels.size(0) == label_predictions.size(0)
+    assert labels.dtype == label_predictions.dtype
+
+    device = labels.device
+
+    ap_at_r = 0
+    for actual, predictions in zip(labels, label_predictions):
+        truths = (actual == predictions)
+        r = truths.sum()
+
+        if r > 0:
+            tp_pos = torch.arange(1, r + 1, device=device)[truths[:r] > 0]
+            ap_at_r += torch.div((torch.arange(len(tp_pos), device=device) + 1), tp_pos).sum() / r
+
+    return ap_at_r / len(labels)
+
+def mapr(model, model_name, loader):
+    # Set model to evaluation mode
+    model.eval()
+    with torch.no_grad():
+        progress_bar = tqdm(enumerate(loader), total=len(loader))
+        progress_bar.set_description(
+            'EVALUATING'
+        )
+        labels = []
+        if model_name == 'PA':
+            embeddings = []
+            for _, (x_batch, y_batch) in progress_bar:
+                model_output = model(x_batch.squeeze().to(device))
+                embeddings.append(model_output)
+                labels.append(y_batch.squeeze().to(device))
+    
+            embeddings = torch.cat(embeddings)  # (number of samples, embedding size)
+            similarity_mat = F.linear(embeddings, embeddings).to(device)
+        else:
+            embeddings = [[], []]
+            for _, (x_batch, y_batch) in progress_bar:
+                model_output = model(x_batch.squeeze().to(device))
+                embeddings[0].append(model_output[0])  # mu
+                embeddings[1].append(model_output[1])  # sigma
+                labels.append(y_batch.squeeze().to(device))
+    
+            embeddings = (torch.cat(embeddings[0]), torch.cat(embeddings[1]))
+            similarity_mat = utils.compute_batch_mls(embeddings, limit_memory=True)
+  
+        labels = torch.cat(labels)  # (number of samples)
+  
+        sorted_similarity_mat = similarity_mat.sort(descending=True)
+  
+        # (n, m) tensor where the tensor at index n contains the sorted similarity scores of the most similar samples
+        # with the sample at index n, excluding the similarity of a sample with itself. n = m = number of samples.
+        ranked_similar_samples_scores = sorted_similarity_mat[0][:, 1:]
+  
+        # (n, m) tensor where the tensor at index n contains the sorted indices of the most similar samples
+        # with the sample at index n, excluding the similarity of a sample with itself. n = m = number of samples.
+        ranked_similar_samples_indices = sorted_similarity_mat[1][:, 1:]
+  
+        ranked_similar_labels = labels[ranked_similar_samples_indices]
+  
+        map_at_r = compute_map_at_r(labels, ranked_similar_labels)
+        print(f'MAP@R: {map_at_r*100:.4f}')
+
+        return map_at_r

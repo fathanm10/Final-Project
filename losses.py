@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import math
 import random
 from pytorch_metric_learning import miners, losses
+import sys
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -109,49 +110,39 @@ class NPairLoss(nn.Module):
         return loss
 
 
-# +
-def negative_MLS(X, Y, sigma_sq_X, sigma_sq_Y, mean=False):
-    D = X.size(1)
-    if mean:
-        Y = Y.t()
-        XX = torch.sum(X**2, dim=1, keepdim=True)
-        YY = torch.sum(Y**2, dim=0, keepdim=True)
-        XY = torch.matmul(X, Y)
-        diffs = XX + YY - 2*XY
-
-        sigma_sq_Y = sigma_sq_Y.t()
-        sigma_sq_X = torch.mean(sigma_sq_X, dim=1, keepdim=True)
-        sigma_sq_Y = torch.mean(sigma_sq_Y, dim=0, keepdim=True)
-        sigma_sq_fuse = sigma_sq_X + sigma_sq_Y
-
-        diffs = diffs / (1e-8 + sigma_sq_fuse) + D * torch.log(sigma_sq_fuse)
-
-        return diffs
-    else:
-        X = X.view(-1, 1, D)
-        Y = Y.view(1, -1, D)
-        sigma_sq_X = sigma_sq_X.view(-1, 1, D)
-        sigma_sq_Y = sigma_sq_Y.view(1, -1, D)
-        sigma_sq_fuse = sigma_sq_X + sigma_sq_Y
-        diffs = (X - Y)**2 / (1e-10 + sigma_sq_fuse) + torch.log(sigma_sq_fuse)
-        return torch.sum(diffs, dim=2)
-
-# Use: loss_func(mu, log_sigma_sq, labels)
 class MutualLikelihoodScoreLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, mean=False):
         super(MutualLikelihoodScoreLoss, self).__init__()
-        
-    def forward(self, mu, log_sigma_sq, labels):
-        batch_size = mu.size(0)
-        diag_mask = torch.eye(batch_size, dtype=torch.bool).to(device)
-        non_diag_mask = ~diag_mask
+        self.mean=mean
+        self.min=sys.maxsize
+    
+    def negMLS(self, mu_X, sigma_sq_X, mean=False):
+        if mean:
+            XX = torch.mul(mu_X, mu_X).sum(dim=1, keepdim=True)
+            YY = torch.mul(mu_X.T, mu_X.T).sum(dim=0, keepdim=True)
+            XY = torch.mm(mu_X, mu_X.T)
+            mu_diff = XX + YY - 2 * XY
+            sig_sum = sigma_sq_X.mean(dim=1, keepdim=True) + sigma_sq_X.T.sum(dim=0, keepdim=True)
+            diff    = mu_diff / (1e-8 + sig_sum) + mu_X.size(1) * torch.log(sig_sum)
+            return diff
+        else:
+            mu_diff = mu_X.unsqueeze(1) - mu_X.unsqueeze(0)
+            sig_sum = sigma_sq_X.unsqueeze(1) + sigma_sq_X.unsqueeze(0)
+            diff    = torch.mul(mu_diff, mu_diff) / (1e-10 + sig_sum) + torch.log(sig_sum)  # BUG
+            diff    = diff.sum(dim=2, keepdim=False)
+            return diff
 
-        sigma_sq = torch.exp(log_sigma_sq)
-        loss_mat = negative_MLS(mu, mu, sigma_sq, sigma_sq)
-
-        label_mat = labels.view(-1, 1) == labels.view(1, -1)
-        label_mask_pos = non_diag_mask & label_mat
-
-        loss_pos = loss_mat.masked_select(label_mask_pos)
-
-        return torch.mean(loss_pos)
+    
+    def forward(self, mu_X, log_sigma_sq, gty):
+        mu_X     = F.normalize(mu_X) # if mu_X was not normalized by l2
+        non_diag_mask = (1 - torch.eye(mu_X.size(0))).int()
+        if gty.device.type == 'cuda':
+            non_diag_mask = non_diag_mask.cuda(0)      
+        sig_X    = torch.exp(log_sigma_sq)
+        loss_mat = self.negMLS(mu_X, sig_X)
+        gty_mask = (torch.eq(gty[:, None], gty[None, :])).int()
+        pos_mask = (non_diag_mask * gty_mask) > 0
+        pos_loss = loss_mat[pos_mask].mean()
+#         if torch.isnan(pos_loss):
+#             pos_loss = torch.tensor(sys.maxsize, dtype=torch.float32, requires_grad=True).float().to(device)
+        return pos_loss
