@@ -235,25 +235,31 @@ class RandomNoise(object):
 # -
 
 class PseudorandomPixelPlacement(object):
-    def __call__(self, img):
-        original_class = type(img).__name__
-        img = np.array(img)
-        original_height, original_width, num_channels = img.shape
+    def __init__(self, p=1):
+        self.p=p
+    
+    def __call__(self, img):        
+        if random() < self.p:
+            original_class = type(img).__name__
+            img = np.array(img)
+            original_height, original_width, num_channels = img.shape
 
-        # Randomly select dx and dy for each pixel
-        dx = np.random.randint(2, size=(original_height // 2, original_width // 2))
-        dy = np.random.randint(2, size=(original_height // 2, original_width // 2))
+            # Randomly select dx and dy for each pixel
+            dx = np.random.randint(2, size=(original_height // 2, original_width // 2))
+            dy = np.random.randint(2, size=(original_height // 2, original_width // 2))
 
-        # Initialize the down-sampled image
-        downsampled_height, downsampled_width = original_height // 2, original_width // 2
-        downsampled_image = np.zeros((downsampled_height, downsampled_width, num_channels), dtype=img.dtype)
+            # Initialize the down-sampled image
+            downsampled_height, downsampled_width = original_height // 2, original_width // 2
+            downsampled_image = np.zeros((downsampled_height, downsampled_width, num_channels), dtype=img.dtype)
 
-        for x in range(downsampled_height):
-            for y in range(downsampled_width):
-                downsampled_image[x, y, :] = img[2 * x + dx[x, y], 2 * y + dy[x, y], :]
-        if original_class == 'Image':
-            downsampled_image = ToPILImage()(downsampled_image)
-        return downsampled_image
+            for x in range(downsampled_height):
+                for y in range(downsampled_width):
+                    downsampled_image[x, y, :] = img[2 * x + dx[x, y], 2 * y + dy[x, y], :]
+            if original_class == 'Image':
+                downsampled_image = ToPILImage()(downsampled_image)
+            return downsampled_image
+        else:
+            return img
 
 # +
 # class MTCNNFaceDetection(object):

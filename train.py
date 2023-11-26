@@ -66,7 +66,6 @@ def get_optimizer(optimizer, param, learning_rate, momentum, weight_decay):
         return optim.RMSprop(param, lr=learning_rate)
 
 
-# +
 def train_model(model_name,
                 loss_func_name,
                 num_classes,
@@ -91,8 +90,10 @@ def train_model(model_name,
     optimizer = get_optimizer(optimizer, model.parameters(), learning_rate, momentum, weight_decay)
     if use_loss_optimizer:
         loss_optimizer = optim.SGD(loss_func.parameters(), lr=loss_learning_rate)
-#     scheduler = lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
-    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, cooldown=2)
+    
+    if model_name != 'pfe':
+#         scheduler = lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
+        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, cooldown=2)
 
     then=time.time()
     for epoch in range(epochs):
@@ -121,8 +122,9 @@ def train_model(model_name,
         if verbose > 0:
             print(f'Epoch [{epoch+1}/{epochs}] Loss: {current_loss:.4f} Time: {time.time() - then:.4f} Learning rate: {optimizer.param_groups[0]["lr"]}')
 
-#         scheduler.step()
-        scheduler.step(current_loss)
+        if model_name != 'pfe':
+#             scheduler.step()
+            scheduler.step(current_loss)
         
         if epoch == 0:
             best_state = model.state_dict()

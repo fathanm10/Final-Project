@@ -15,16 +15,9 @@ import pickle
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+
 # +
-'''
-@InProceedings{Kim_2020_CVPR,
-    author = {Kim, Sungyeon and Kim, Dongwon and Cho, Minsu and Kwak, Suha},
-    title = {Proxy Anchor Loss for Deep Metric Learning},
-    booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
-    month = {June},
-    year = {2020}
-}
-'''
+# Code taken from https://github.com/tjddus9597/Proxy-Anchor-CVPR2020/blob/master/code/utils.py
 def l2_norm(input):
     input_size = input.size()
     buffer = torch.pow(input, 2)
@@ -492,8 +485,8 @@ def mapr(model, model_name, loader):
                 embeddings[1].append(model_output[1])  # sigma
                 labels.append(y_batch.squeeze().to(device))
     
-            embeddings = (torch.cat(embeddings[0]), torch.cat(embeddings[1]))
-            similarity_mat = utils.compute_batch_mls(embeddings, limit_memory=True)
+            embeddings = torch.cat(embeddings[0])
+            similarity_mat = F.linear(embeddings, embeddings).to(device)
   
         labels = torch.cat(labels)  # (number of samples)
   

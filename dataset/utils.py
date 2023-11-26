@@ -82,10 +82,10 @@ def compose(image_size=0,
             transforms.RandomResizedCrop(random_resized_crop),
             transforms.RandomHorizontalFlip(.5),
 #             transforms.ColorJitter(brightness=.5, contrast=.5, saturation=.5, hue=0),
+#             transforms.RandomRotation(20),
+#             PseudorandomPixelPlacement(p=.5)
 #             transforms.RandomVerticalFlip(.5),
-#             transforms.RandomRotation(10),
 #             Cutout(max_w_size=8,max_h_size=8,p=1),
-#             PseudorandomPixelPlacement()
         ]
         
     if autocontrast:
@@ -238,7 +238,7 @@ def load_dataset(dataset,batch_size,shuffle=True, drop_last=False):
     return loader
 
 
-def preprocess_dataset(transform_params):
+def preprocess_dataset(transform_params, gfpgan=False):
     transform = compose(tensor=0, **transform_params)
 
     dataset = torchvision.datasets.LFWPeople(
@@ -249,9 +249,13 @@ def preprocess_dataset(transform_params):
             'download': 1
         }
     )
-    tar = tarfile.open("./data/lfw-py/lfw-deepfunneled.tgz")
-    tar.extractall("./data/lfw-py")
-    tar.close()
+    if gfpgan:
+        shutil.copytree('./data/lfw-py/lfw-deepfunneled-GFPGAN', './data/lfw-py/lfw-deepfunneled', dirs_exist_ok=True)  # Fine
+    else:
+        tar = tarfile.open("./data/lfw-py/lfw-deepfunneled.tgz")
+        tar.extractall("./data/lfw-py")
+        tar.close()
+        
     if len(transform_params) == 0:
         return
     for image_path in tqdm(dataset.data, desc='Preprocessing Dataset...'):
