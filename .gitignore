@@ -4,3 +4,6 @@ __*/
 data/
 *.pkl
 *.csv
+GFPGAN/
+**/pretrained_models/**
+gfpgan/weights/

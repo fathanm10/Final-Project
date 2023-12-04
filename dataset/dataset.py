@@ -23,7 +23,7 @@ import numpy as np
 class LFWCustom(Dataset):
     def __init__(self, root, split='10fold', max_classes=None, min_samples=None, transform=None):
         self.root = os.path.join(root, 'lfw-py')
-        self.data_dir = os.path.join(self.root, 'lfw_funneled')
+        self.data_dir = os.path.join(self.root, 'lfw-deepfunneled')
         self.split = split
         self.test_ratio = 0.33
         self.num_classes = max_classes

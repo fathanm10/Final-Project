@@ -140,8 +140,6 @@ def train_model(model_name,
 
     print(f'Finished Training, Time: {time.time()-then:.4f} Best loss: {best_loss:.4f}')
     model.load_state_dict(best_state)
-    try:
+    if save_path != None:
         torch.save(model, save_path)
-    except:
-        pass
     return model

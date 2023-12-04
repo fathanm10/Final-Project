@@ -24,6 +24,11 @@ from face_recognition import face_locations
 from torchvision.transforms.functional import autocontrast
 from torchvision.transforms import ToPILImage, ToTensor, CenterCrop
 from random import random
+from basicsr.archs.rrdbnet_arch import RRDBNet
+from realesrgan import RealESRGANer
+import cv2
+from gfpgan import GFPGANer
+from PIL import Image
 # import albumentations as A
 # from facenet_pytorch import MTCNN
 
@@ -261,6 +266,7 @@ class PseudorandomPixelPlacement(object):
         else:
             return img
 
+
 # +
 # class MTCNNFaceDetection(object):
 #     def __init__(self, post_process=False, margin=0, crop_size=125):
@@ -275,3 +281,29 @@ class PseudorandomPixelPlacement(object):
 #         if ~self.post_process:
 #             img = img.astype(np.uint8)
 #         return ToPILImage()(img)
+# -
+
+class GFPGANRestorer(object):
+    def __init__(self, upscale=2, bg_upsampler='realesrgan'):
+        model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=2)
+        bg_upsampler = RealESRGANer(
+            scale=2,
+            model_path='https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth',
+            model=model,
+            tile=400,
+            tile_pad=10,
+            pre_pad=0,
+            half=True)  # need to set False in CPU mode
+        self.restorer = GFPGANer(
+            model_path='./experiments/pretrained_models/GFPGANv1.3.pth',
+            upscale=2,
+            arch='clean',
+            channel_multiplier=2,
+            bg_upsampler=bg_upsampler)
+    def __call__(self, img):
+        img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        _,_, restored_img = self.restorer.enhance(img)
+        restored_img = cv2.cvtColor(restored_img, cv2.COLOR_BGR2RGB)
+        restored_img = Image.fromarray(restored_img)
+        return restored_img
+    
