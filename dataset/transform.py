@@ -306,4 +306,4 @@ class GFPGANRestorer(object):
         restored_img = cv2.cvtColor(restored_img, cv2.COLOR_BGR2RGB)
         restored_img = Image.fromarray(restored_img)
         return restored_img
-    
+
